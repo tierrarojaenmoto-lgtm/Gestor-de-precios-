@@ -231,7 +231,7 @@
     <input type="file" id="excelInput" accept=".xlsx, .xls">
     <label style="display:flex;align-items:center;gap:6px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;">
       <input type="checkbox" id="incluirCostoCheck" style="width:16px;height:16px;">
-      Incluir precio de costo
+      Incluir precio de costo (PDF)
     </label>
     <button class="btn btn-success" id="exportPdfBtn" disabled>⬇ Exportar PDF</button>
     <button class="btn btn-success" id="exportCsvBtn" disabled>⬇ Exportar CSV</button>
@@ -685,31 +685,39 @@ function exportarPDF(){
   doc.save(`Lista_de_precios_GP_${fechaActual.replace(/\//g, "-")}.pdf`);
 }
 
-// EXPORTACIÓN A CSV
+// EXPORTACIÓN A CSV (formato Inventario para app de ventas)
 function exportarCSV(){
   if(!productos.length) return;
-  const incluirCosto = el("incluirCostoCheck").checked;
   const fechaActual = new Date().toLocaleDateString("es-AR");
 
-  const headers = incluirCosto
-    ? ["Código", "Producto", "Precio Costo", "Precio Venta"]
-    : ["Código", "Producto", "Precio Venta"];
+  const headers = ["Clave","Unidad","Nombre del producto","Cantidad","Precio de Compra","Precio de Venta","Reserva","Precios de venta adicionales (opcional)","Información Adicional","Categoría"];
 
-  const filas = productos.map(p => incluirCosto
-    ? [p.codigo, p.descripcion, p.costo, p.venta]
-    : [p.codigo, p.descripcion, p.venta]
-  );
+  const csvField = (v) => {
+    const s = String(v ?? "");
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
 
-  const csvLineas = [headers, ...filas].map(fila =>
-    fila.map(v => `"${String(v).replace(/"/g, '""')}"`).join(";")
-  );
-  const csvContent = "\uFEFF" + csvLineas.join("\r\n");
+  const filas = productos.map(p => [
+    String(p.codigo).slice(0, 18),
+    "PIEZA",
+    String(p.descripcion).slice(0, 50),
+    0,
+    p.costo,
+    p.venta,
+    0,
+    "",
+    "",
+    ""
+  ]);
+
+  const csvLineas = [headers, ...filas].map(fila => fila.map(csvField).join(","));
+  const csvContent = "\uFEFF" + csvLineas.join("\r\n") + "\r\n";
 
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `Lista_de_precios_GP_${fechaActual.replace(/\//g, "-")}.csv`;
+  a.download = `Inventario_GP_${fechaActual.replace(/\//g, "-")}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
