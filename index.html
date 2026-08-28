@@ -229,7 +229,12 @@
   <div class="row" style="gap:10px;">
     <label class="file-label" for="excelInput">📊 Subir Excel de costos</label>
     <input type="file" id="excelInput" accept=".xlsx, .xls">
-    <button class="btn btn-success" id="exportBtn" disabled>⬇ Exportar PDF Final</button>
+    <label style="display:flex;align-items:center;gap:6px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;">
+      <input type="checkbox" id="incluirCostoCheck" style="width:16px;height:16px;">
+      Incluir precio de costo
+    </label>
+    <button class="btn btn-success" id="exportPdfBtn" disabled>⬇ Exportar PDF</button>
+    <button class="btn btn-success" id="exportCsvBtn" disabled>⬇ Exportar CSV</button>
   </div>
 </header>
 
@@ -495,7 +500,8 @@ function loadProductos(){
       productos = saved;
       el("tableCard").style.display = "block";
       el("emptyCard").style.display = "none";
-      el("exportBtn").disabled = false;
+      el("exportPdfBtn").disabled = false;
+      el("exportCsvBtn").disabled = false;
       renderTable();
     }
   }catch(e){}
@@ -631,6 +637,7 @@ async function procesarExcel(file){
 // EXPORTACIÓN A PDF
 function exportarPDF(){
   if(!productos.length) return;
+  const incluirCosto = el("incluirCostoCheck").checked;
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
@@ -647,16 +654,28 @@ function exportarPDF(){
   doc.text("Lista de Precios de Venta", 14, 24);
   doc.text(`Fecha: ${fechaActual}`, 196, 24, { align: "right" });
 
-  const data = productos.map(p => [p.codigo, p.descripcion, money(p.venta)]);
+  const head = incluirCosto
+    ? [["Código", "Producto", "Precio Costo", "Precio Venta"]]
+    : [["Código", "Producto", "Precio Venta"]];
+
+  const data = productos.map(p => incluirCosto
+    ? [p.codigo, p.descripcion, money(p.costo), money(p.venta)]
+    : [p.codigo, p.descripcion, money(p.venta)]
+  );
 
   doc.autoTable({
     startY: 28,
-    head: [["Código", "Producto", "Precio Venta"]],
+    head: head,
     body: data,
     theme: "striped",
     headStyles: { fillColor: [41, 98, 255], textColor: 255, fontStyle: "bold" },
     styles: { fontSize: 9, cellPadding: 3 },
-    columnStyles: {
+    columnStyles: incluirCosto ? {
+      0: { cellWidth: 30 },
+      1: { cellWidth: "auto" },
+      2: { cellWidth: 32, halign: "right" },
+      3: { cellWidth: 32, halign: "right", fontStyle: "bold" }
+    } : {
       0: { cellWidth: 35 },
       1: { cellWidth: "auto" },
       2: { cellWidth: 45, halign: "right", fontStyle: "bold" }
@@ -666,6 +685,37 @@ function exportarPDF(){
   doc.save(`Lista_de_precios_GP_${fechaActual.replace(/\//g, "-")}.pdf`);
 }
 
+// EXPORTACIÓN A CSV
+function exportarCSV(){
+  if(!productos.length) return;
+  const incluirCosto = el("incluirCostoCheck").checked;
+  const fechaActual = new Date().toLocaleDateString("es-AR");
+
+  const headers = incluirCosto
+    ? ["Código", "Producto", "Precio Costo", "Precio Venta"]
+    : ["Código", "Producto", "Precio Venta"];
+
+  const filas = productos.map(p => incluirCosto
+    ? [p.codigo, p.descripcion, p.costo, p.venta]
+    : [p.codigo, p.descripcion, p.venta]
+  );
+
+  const csvLineas = [headers, ...filas].map(fila =>
+    fila.map(v => `"${String(v).replace(/"/g, '""')}"`).join(";")
+  );
+  const csvContent = "\uFEFF" + csvLineas.join("\r\n");
+
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `Lista_de_precios_GP_${fechaActual.replace(/\//g, "-")}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 // Event Listeners
 el("saveConfigBtn").addEventListener("click", saveConfig);
 
@@ -673,7 +723,8 @@ el("searchInput").addEventListener("input", (e) => {
   renderTable(e.target.value);
 });
 
-el("exportBtn").addEventListener("click", exportarPDF);
+el("exportPdfBtn").addEventListener("click", exportarPDF);
+el("exportCsvBtn").addEventListener("click", exportarCSV);
 
 el("excelInput").addEventListener("change", async (e) => {
   const file = e.target.files[0];
@@ -706,7 +757,8 @@ el("excelInput").addEventListener("change", async (e) => {
     el("parseStatus").className = "status-msg ok";
     el("tableCard").style.display = "block";
     el("emptyCard").style.display = "none";
-    el("exportBtn").disabled = false;
+    el("exportPdfBtn").disabled = false;
+    el("exportCsvBtn").disabled = false;
     renderTable();
   } catch(err){
     console.error(err);
